@@ -2,7 +2,23 @@ import streamlit as st
 import torch
 import pandas as pd
 import numpy as np
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+# Try importing transformers with error handling
+try:
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification
+except ImportError as e:
+    st.error(f"""
+    **Import Error**: Failed to import transformers components.
+    
+    **Error Details**: {str(e)}
+    
+    **Possible Solutions**:
+    1. Python 3.13 is not fully compatible with transformers. Add `.python-version` file with content `3.11`
+    2. Try reinstalling dependencies
+    3. Check if transformers is properly installed
+    """)
+    st.stop()
+
 import plotly.graph_objects as go
 import plotly.express as px
 from typing import Dict, List
