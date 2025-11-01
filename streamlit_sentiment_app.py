@@ -304,24 +304,19 @@ def display_result(result: Dict):
         st.plotly_chart(fig_prob, use_container_width=True)
 
 def main():
-    # Check if model exists, if not download it
+    # Model should already exist in the repo
     model_dir = Path("model")
-    if not model_dir.exists() or not (model_dir / "config.json").exists():
-        st.warning("⚠️ Model files not found locally.")
-        
-        if st.button("📥 Download Model from GitHub Release"):
-            download_model_from_release()
-            return
-        
+    
+    # Simple check - if files are missing, show error
+    required_files = ["config.json", "tokenizer_config.json", "vocab.txt"]
+    missing_files = [f for f in required_files if not (model_dir / f).exists()]
+    
+    if missing_files:
+        st.error(f"❌ Missing model files: {', '.join(missing_files)}")
         st.info("""
-        **Setup Instructions:**
-        1. Click the button above to download the model from GitHub release, OR
-        2. Add model files directly to `model/` folder in your repository, OR
-        3. Use Hugging Face Hub (update `model_path` to 'username/model-name')
-        
-        **Model files needed:**
+        **Model files should be in the `model/` folder:**
         - config.json
-        - pytorch_model.bin
+        - model.safetensors (or pytorch_model.bin)
         - tokenizer_config.json
         - vocab.txt
         - special_tokens_map.json
