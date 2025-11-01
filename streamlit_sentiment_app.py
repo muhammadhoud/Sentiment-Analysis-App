@@ -65,8 +65,6 @@ def download_model_from_release():
     try:
         st.info("📥 Model not found. Downloading from GitHub release...")
         
-        # UPDATE THIS URL with your actual GitHub release URL
-        # Format: https://github.com/USERNAME/REPO/releases/download/TAG/FILE.zip
         release_url = "https://github.com/muhammadhoud/Sentiment-Analysis-App/releases/download/v1.0.0/sentiment_bert_model.zip"
         
         # Create model directory
@@ -77,14 +75,7 @@ def download_model_from_release():
         total_size = int(response.headers.get('content-length', 0))
         
         if response.status_code == 404:
-            st.error("❌ Model file not found in GitHub releases. Please upload the model.")
-            st.info("""
-            **To fix this:**
-            1. Go to your GitHub repository
-            2. Click "Releases" → "Create a new release"
-            3. Upload `sentiment_bert_model.zip`
-            4. Update the `release_url` in the code with your actual URL
-            """)
+            st.error("❌ Model file not found in GitHub releases.")
             return False
         
         zip_path = "model_temp.zip"
@@ -102,27 +93,53 @@ def download_model_from_release():
         progress_bar.empty()
         st.info("📦 Extracting model files...")
         
-        # Extract
+        # Extract and handle nested folders
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(model_dir)
+            # Get list of files in zip
+            file_list = zip_ref.namelist()
+            
+            # Check if files are in a subdirectory
+            has_subdirectory = any('/' in name for name in file_list)
+            
+            if has_subdirectory:
+                # Extract to temp location first
+                temp_extract = Path("temp_model")
+                temp_extract.mkdir(exist_ok=True)
+                zip_ref.extractall(temp_extract)
+                
+                # Find the actual model files (look for config.json)
+                for root, dirs, files in os.walk(temp_extract):
+                    if "config.json" in files:
+                        # Move files from nested folder to model directory
+                        import shutil
+                        for file in os.listdir(root):
+                            src = os.path.join(root, file)
+                            dst = model_dir / file
+                            if os.path.isfile(src):
+                                shutil.copy2(src, dst)
+                        break
+                
+                # Clean up temp directory
+                shutil.rmtree(temp_extract)
+            else:
+                # Direct extraction
+                zip_ref.extractall(model_dir)
         
-        # Clean up
+        # Clean up zip file
         os.remove(zip_path)
         
-        st.success("✅ Model downloaded successfully!")
-        time.sleep(2)
-        st.rerun()
-        
-        return True
+        # Verify extraction
+        if (model_dir / "config.json").exists():
+            st.success("✅ Model downloaded successfully!")
+            time.sleep(2)
+            st.rerun()
+            return True
+        else:
+            st.error("❌ Model files not found after extraction. Please check the zip structure.")
+            return False
         
     except Exception as e:
         st.error(f"❌ Error downloading model: {str(e)}")
-        st.info("""
-        **Alternative options:**
-        1. Add model files directly to your GitHub repository in `model/` folder
-        2. Use Hugging Face Hub (change model_path to 'username/model-name')
-        3. Check if the release URL is correct
-        """)
         return False
 
 class SentimentPredictor:
