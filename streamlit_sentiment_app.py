@@ -7,6 +7,10 @@ import plotly.graph_objects as go
 import plotly.express as px
 from typing import Dict, List
 import time
+import os
+import zipfile
+import requests
+from pathlib import Path
 
 # Page configuration
 st.set_page_config(
@@ -49,6 +53,77 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+def download_model_from_release():
+    """Download model from GitHub release if not present"""
+    model_dir = Path("model")
+    
+    # Check if model already exists
+    if model_dir.exists() and (model_dir / "config.json").exists():
+        return True
+    
+    try:
+        st.info("📥 Model not found. Downloading from GitHub release...")
+        
+        # UPDATE THIS URL with your actual GitHub release URL
+        # Format: https://github.com/USERNAME/REPO/releases/download/TAG/FILE.zip
+        release_url = "https://github.com/muhammadhoud/Sentiment-Analysis-App/releases/tag/v1.0.0/model.zip"
+        
+        # Create model directory
+        model_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Download with progress
+        response = requests.get(release_url, stream=True)
+        total_size = int(response.headers.get('content-length', 0))
+        
+        if response.status_code == 404:
+            st.error("❌ Model file not found in GitHub releases. Please upload the model.")
+            st.info("""
+            **To fix this:**
+            1. Go to your GitHub repository
+            2. Click "Releases" → "Create a new release"
+            3. Upload `sentiment_bert_model.zip`
+            4. Update the `release_url` in the code with your actual URL
+            """)
+            return False
+        
+        zip_path = "model_temp.zip"
+        progress_bar = st.progress(0)
+        downloaded = 0
+        
+        with open(zip_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        progress_bar.progress(downloaded / total_size)
+        
+        progress_bar.empty()
+        st.info("📦 Extracting model files...")
+        
+        # Extract
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(model_dir)
+        
+        # Clean up
+        os.remove(zip_path)
+        
+        st.success("✅ Model downloaded successfully!")
+        time.sleep(2)
+        st.rerun()
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"❌ Error downloading model: {str(e)}")
+        st.info("""
+        **Alternative options:**
+        1. Add model files directly to your GitHub repository in `model/` folder
+        2. Use Hugging Face Hub (change model_path to 'username/model-name')
+        3. Check if the release URL is correct
+        """)
+        return False
 
 class SentimentPredictor:
     """Handles predictions using trained sentiment analysis models."""
@@ -212,6 +287,30 @@ def display_result(result: Dict):
         st.plotly_chart(fig_prob, use_container_width=True)
 
 def main():
+    # Check if model exists, if not download it
+    model_dir = Path("model")
+    if not model_dir.exists() or not (model_dir / "config.json").exists():
+        st.warning("⚠️ Model files not found locally.")
+        
+        if st.button("📥 Download Model from GitHub Release"):
+            download_model_from_release()
+            return
+        
+        st.info("""
+        **Setup Instructions:**
+        1. Click the button above to download the model from GitHub release, OR
+        2. Add model files directly to `model/` folder in your repository, OR
+        3. Use Hugging Face Hub (update `model_path` to 'username/model-name')
+        
+        **Model files needed:**
+        - config.json
+        - pytorch_model.bin
+        - tokenizer_config.json
+        - vocab.txt
+        - special_tokens_map.json
+        """)
+        st.stop()
+    
     # Header
     st.markdown('<h1 class="main-header">🎭 Sentiment Analysis App</h1>', unsafe_allow_html=True)
     st.markdown("---")
