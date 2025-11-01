@@ -67,7 +67,7 @@ def download_model_from_release():
         
         # UPDATE THIS URL with your actual GitHub release URL
         # Format: https://github.com/USERNAME/REPO/releases/download/TAG/FILE.zip
-        release_url = "https://github.com/muhammadhoud/Sentiment-Analysis-App/releases/download/v1.0.0/model.zip"
+        release_url = "https://github.com/muhammadhoud/Sentiment-Analysis-App/releases/download/v1.0.0/sentiment_bert_model.zip"
         
         # Create model directory
         model_dir.mkdir(parents=True, exist_ok=True)
