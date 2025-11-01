@@ -151,57 +151,61 @@ class SentimentPredictor:
     
     def __init__(self, model_path: str = "model"):
         self.model_path = model_path
-        self.model = None
-        self.tokenizer = None
-        self.class_names = ['Negative', 'Neutral', 'Positive']
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.class_names = ['Negative', 'Neutral', 'Positive']
+        # Load model and tokenizer immediately
+        self.model, self.tokenizer = self._load_model_and_tokenizer()
         
     @st.cache_resource
-    def load_model(_self):
-        """Load model and tokenizer (cached)"""
+    def _load_model_and_tokenizer(_self):
+        """Load model and tokenizer (cached) - returns tuple"""
         try:
-            _self.model = AutoModelForSequenceClassification.from_pretrained(_self.model_path)
-            _self.tokenizer = AutoTokenizer.from_pretrained(_self.model_path)
-            _self.model.to(_self.device)
-            _self.model.eval()
-            return True
+            model = AutoModelForSequenceClassification.from_pretrained(_self.model_path)
+            tokenizer = AutoTokenizer.from_pretrained(_self.model_path)
+            model.to(_self.device)
+            model.eval()
+            return model, tokenizer
         except Exception as e:
             st.error(f"Error loading model: {str(e)}")
-            return False
+            return None, None
     
     def predict_single(self, text: str) -> Dict:
         """Predict sentiment for a single text"""
         if self.model is None or self.tokenizer is None:
-            if not self.load_model():
-                return None
+            st.error("Model or tokenizer failed to load. Please check the model files.")
+            return None
         
-        inputs = self.tokenizer(
-            text,
-            truncation=True,
-            padding=True,
-            max_length=128,
-            return_tensors="pt"
-        ).to(self.device)
-        
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            logits = outputs.logits
-            probabilities = torch.softmax(logits, dim=1)
-            predicted_class = torch.argmax(logits, dim=1).item()
-        
-        confidence = probabilities[0][predicted_class].item()
-        
-        class_probabilities = {
-            self.class_names[i]: probabilities[0][i].item()
-            for i in range(len(self.class_names))
-        }
-        
-        return {
-            'text': text,
-            'predicted_class': self.class_names[predicted_class],
-            'confidence': confidence,
-            'class_probabilities': class_probabilities
-        }
+        try:
+            inputs = self.tokenizer(
+                text,
+                truncation=True,
+                padding=True,
+                max_length=128,
+                return_tensors="pt"
+            ).to(self.device)
+            
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                logits = outputs.logits
+                probabilities = torch.softmax(logits, dim=1)
+                predicted_class = torch.argmax(logits, dim=1).item()
+            
+            confidence = probabilities[0][predicted_class].item()
+            
+            class_probabilities = {
+                self.class_names[i]: probabilities[0][i].item()
+                for i in range(len(self.class_names))
+            }
+            
+            return {
+                'text': text,
+                'predicted_class': self.class_names[predicted_class],
+                'confidence': confidence,
+                'class_probabilities': class_probabilities
+            }
+        except Exception as e:
+            st.error(f"Error during prediction: {str(e)}")
+            return None
     
     def predict_batch(self, texts: List[str]) -> List[Dict]:
         """Predict sentiment for multiple texts"""
