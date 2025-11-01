@@ -54,28 +54,30 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-def download_model_from_release():
-    """Download model from GitHub release if not present"""
+def download_model_weights():
+    """Download only the model.safetensors file from GitHub release"""
     model_dir = Path("model")
+    model_file = model_dir / "model.safetensors"
     
-    # Check if model already exists
-    if model_dir.exists() and (model_dir / "config.json").exists():
+    # Check if model.safetensors already exists
+    if model_file.exists():
         return True
     
     try:
-        st.info("📥 Model not found. Downloading from GitHub release...")
+        st.info("📥 Downloading model weights from GitHub release...")
         
+        # Direct download URL for the zip file
         release_url = "https://github.com/muhammadhoud/Sentiment-Analysis-App/releases/download/v1.0.0/sentiment_bert_model.zip"
         
-        # Create model directory
+        # Create model directory if it doesn't exist
         model_dir.mkdir(parents=True, exist_ok=True)
         
         # Download with progress
         response = requests.get(release_url, stream=True)
         total_size = int(response.headers.get('content-length', 0))
         
-        if response.status_code == 404:
-            st.error("❌ Model file not found in GitHub releases.")
+        if response.status_code != 200:
+            st.error(f"❌ Failed to download model. Status code: {response.status_code}")
             return False
         
         zip_path = "model_temp.zip"
@@ -91,51 +93,37 @@ def download_model_from_release():
                         progress_bar.progress(downloaded / total_size)
         
         progress_bar.empty()
-        st.info("📦 Extracting model files...")
+        st.info("📦 Extracting model weights...")
         
-        # Extract and handle nested folders
+        # Extract only model.safetensors from zip
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            # Get list of files in zip
-            file_list = zip_ref.namelist()
-            
-            # Check if files are in a subdirectory
-            has_subdirectory = any('/' in name for name in file_list)
-            
-            if has_subdirectory:
-                # Extract to temp location first
-                temp_extract = Path("temp_model")
-                temp_extract.mkdir(exist_ok=True)
-                zip_ref.extractall(temp_extract)
-                
-                # Find the actual model files (look for config.json)
-                for root, dirs, files in os.walk(temp_extract):
-                    if "config.json" in files:
-                        # Move files from nested folder to model directory
+            # Look for model.safetensors in the zip
+            for file_info in zip_ref.filelist:
+                if 'model.safetensors' in file_info.filename:
+                    # Extract to model directory
+                    zip_ref.extract(file_info, model_dir)
+                    # If it was in a subdirectory, move it to model root
+                    extracted_path = model_dir / file_info.filename
+                    if extracted_path != model_file:
                         import shutil
-                        for file in os.listdir(root):
-                            src = os.path.join(root, file)
-                            dst = model_dir / file
-                            if os.path.isfile(src):
-                                shutil.copy2(src, dst)
-                        break
-                
-                # Clean up temp directory
-                shutil.rmtree(temp_extract)
-            else:
-                # Direct extraction
-                zip_ref.extractall(model_dir)
+                        shutil.move(str(extracted_path), str(model_file))
+                        # Clean up any subdirectories
+                        parent = extracted_path.parent
+                        if parent != model_dir and parent.exists():
+                            shutil.rmtree(parent)
+                    break
         
         # Clean up zip file
         os.remove(zip_path)
         
         # Verify extraction
-        if (model_dir / "config.json").exists():
-            st.success("✅ Model downloaded successfully!")
-            time.sleep(2)
+        if model_file.exists():
+            st.success("✅ Model weights downloaded successfully!")
+            time.sleep(1)
             st.rerun()
             return True
         else:
-            st.error("❌ Model files not found after extraction. Please check the zip structure.")
+            st.error("❌ model.safetensors not found in the zip file.")
             return False
         
     except Exception as e:
@@ -304,22 +292,25 @@ def display_result(result: Dict):
         st.plotly_chart(fig_prob, use_container_width=True)
 
 def main():
-    # Model should already exist in the repo
+    # Check if model weights exist
     model_dir = Path("model")
+    model_file = model_dir / "model.safetensors"
     
-    # Simple check - if files are missing, show error
-    required_files = ["config.json", "tokenizer_config.json", "vocab.txt"]
-    missing_files = [f for f in required_files if not (model_dir / f).exists()]
-    
-    if missing_files:
-        st.error(f"❌ Missing model files: {', '.join(missing_files)}")
+    # Check if model.safetensors is missing
+    if not model_file.exists():
+        st.warning("⚠️ Model weights not found. Click below to download.")
+        
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            if st.button("📥 Download Model Weights", type="primary"):
+                download_model_weights()
+                return
+        
         st.info("""
-        **Model files should be in the `model/` folder:**
-        - config.json
-        - model.safetensors (or pytorch_model.bin)
-        - tokenizer_config.json
-        - vocab.txt
-        - special_tokens_map.json
+        **What's happening:**
+        - Config and tokenizer files are already in the repository ✅
+        - Model weights (model.safetensors) will be downloaded from GitHub release
+        - This is a one-time download (~400MB)
         """)
         st.stop()
     
